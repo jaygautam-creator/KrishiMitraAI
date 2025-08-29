@@ -1,24 +1,60 @@
-# Virtual environment
-.venv/
-venv/
+# # VS Code
+# .vscode/
+# *.code-workspace
+# logs/
 
-# Python cache
+# # Virtual environment
+# .venv/
+# venv/
+
+# # Python cache
+# __pycache__/
+# *.pyc
+# *.pyo
+# *.pyd
+
+# # System files
+# .DS_Store
+
+# # Model binaries (large files)
+# *.pkl
+# *.joblib
+# *.zip
+
+# # Environment files
+# .env
+
+# .ipynb_checkpoints/
+# *.sqlite3
+# *.log
+# --- Python ---
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 *.pyd
+*.ipynb_checkpoints/
 
-# System files
+# --- Virtual environment ---
+.venv/
+venv/
+env/
+
+# --- System files ---
 .DS_Store
+Thumbs.db
 
-# Model binaries (large files)
+# --- Secrets ---
+.env
+*.key
+*.pem
+
+# --- Models & Large files ---
 *.pkl
 *.joblib
+*.h5
 *.zip
 
-# Environment files
-.env
-
-.ipynb_checkpoints/
-*.sqlite3
-*.log
+# --- VS Code ---
+.vscode/
+*.code-workspace
+logs/
