@@ -1,0 +1,24 @@
+# Virtual environment
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# System files
+.DS_Store
+
+# Model binaries (large files)
+*.pkl
+*.joblib
+*.zip
+
+# Environment files
+.env
+
+.ipynb_checkpoints/
+*.sqlite3
+*.log

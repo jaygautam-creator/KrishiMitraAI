@@ -1,0 +1,28 @@
+# Core app framework
+streamlit==1.24.0
+
+# Data processing
+numpy==1.24.3
+pandas==2.0.2
+
+# Machine Learning
+scikit-learn==1.7.1
+xgboost==1.7.5
+
+# API + environment management
+requests==2.31.0
+python-dotenv==1.0.0
+
+# Visualization
+plotly==5.15.0
+
+# Geolocation
+geopy==2.3.0
+
+# PDF generation
+fpdf==1.7.2
+
+# (Optional but useful for compatibility & deployment)
+matplotlib==3.7.1
+seaborn==0.12.2
+joblib==1.2.0
