@@ -1,4 +1,3 @@
-# app.py
 import os
 from pathlib import Path
 from datetime import datetime
@@ -11,11 +10,20 @@ import requests
 import streamlit as st
 from streamlit_option_menu import option_menu  # For better navigation
 
+# Try to import Gemini SDK (optional)
+try:
+    import google.generativeai as genai  # gemini api
+except Exception:
+    genai = None
+
 # -------------------------
 # Basic logging
 # -------------------------
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("krishimitra")
+
+# Debug mode
+DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
 # =========================
 # Page Config (must be the first Streamlit UI call)
@@ -59,19 +67,39 @@ MODEL_PATH = BASE_DIR / "crop_model.pkl"
 if not MODEL_PATH.exists():
     MODEL_PATH = BASE_DIR.parent / "crop_model.pkl"
 
-# API key - prefer st.secrets, then env; fail if missing (Option A - strict)
+# =========================
+# API Keys (OpenWeather required; Gemini optional)
+# =========================
 API_KEY = None
 try:
     API_KEY = st.secrets.get("OPENWEATHER_API_KEY")  # type: ignore
 except Exception:
     API_KEY = None
-
 if not API_KEY:
     API_KEY = os.getenv("OPENWEATHER_API_KEY")
-
 if not API_KEY:
     st.error("Missing OpenWeather API key. Set OPENWEATHER_API_KEY in st.secrets or as an environment variable.")
     st.stop()
+
+GEMINI_API_KEY = None
+try:
+    GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY")  # type: ignore
+except Exception:
+    GEMINI_API_KEY = None
+if not GEMINI_API_KEY:
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+# Configure Gemini (graceful if missing)
+gemini_model = None
+if genai and GEMINI_API_KEY:
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+    except Exception as e:
+        logger.error(f"Gemini configuration failed: {e}")
+        gemini_model = None
+elif not GEMINI_API_KEY:
+    st.info("Gemini API key not found. AI Chat feature will be limited.")
 
 # =========================
 # Crop Diseases Database
@@ -245,6 +273,132 @@ def get_weather(lat: float, lon: float):
         logger.exception("Error computing weather aggregates")
         return None, None, None
 
+def get_fallback_recommendations(n, p, k, ph, temp, humidity, rainfall, land_area, budget):
+    """Fallback recommendation system based on simple rules"""
+    # Simple rule-based recommendations
+    recommendations = []
+    
+    # Based on pH
+    if ph < 5.5:
+        recommendations.append({
+            "name": "Rice",
+            "roi": budget * 1.8,
+            "profit": budget * 0.9,
+            "investment": budget * 0.9,
+            "demand": "High",
+            "price_trend": 1,
+            "harvest_time": "4-5",
+            "resilience": "8",
+            "sowing_window": "June-July",
+            "critical_months": "August-September",
+            "weather_impact": {"Temperature": "Optimal between 20-35°C", "Rainfall": "Requires standing water"},
+            "tips": ["Maintain proper water level", "Use balanced fertilizers"],
+            "warnings": ["Avoid water stress during flowering"]
+        })
+    elif ph > 7.5:
+        recommendations.append({
+            "name": "Cotton",
+            "roi": budget * 1.6,
+            "profit": budget * 0.8,
+            "investment": budget * 0.8,
+            "demand": "Medium",
+            "price_trend": 1,
+            "harvest_time": "5-6",
+            "resilience": "7",
+            "sowing_window": "April-May",
+            "critical_months": "July-August",
+            "weather_impact": {"Temperature": "Optimal between 21-30°C", "Rainfall": "Moderate rainfall required"},
+            "tips": ["Practice crop rotation", "Use drip irrigation"],
+            "warnings": ["Susceptible to bollworm attack"]
+        })
+    else:
+        # Based on temperature
+        if temp > 30:
+            recommendations.append({
+                "name": "Sugarcane",
+                "roi": budget * 1.7,
+                "profit": budget * 0.85,
+                "investment": budget * 0.85,
+                "demand": "Medium",
+                "price_trend": 1,
+                "harvest_time": "10-12",
+                "resilience": "8",
+                "sowing_window": "February-March",
+                "critical_months": "June-July",
+                "weather_impact": {"Temperature": "Optimal between 20-35°C", "Rainfall": "Requires adequate water"},
+                "tips": ["Use tissue-cultured plants", "Practice ratooning"],
+                "warnings": ["Susceptible to red rot disease"]
+            })
+        elif temp < 15:
+            recommendations.append({
+                "name": "Wheat",
+                "roi": budget * 1.5,
+                "profit": budget * 0.7,
+                "investment": budget * 0.8,
+                "demand": "High",
+                "price_trend": 1,
+                "harvest_time": "3-4",
+                "resilience": "9",
+                "sowing_window": "October-November",
+                "critical_months": "January-February",
+                "weather_impact": {"Temperature": "Optimal between 10-25°C", "Rainfall": "Moderate rainfall required"},
+                "tips": ["Use certified seeds", "Timely irrigation"],
+                "warnings": ["Avoid late sowing"]
+            })
+        else:
+            # Default recommendation
+            recommendations.append({
+                "name": "Maize",
+                "roi": budget * 1.6,
+                "profit": budget * 0.75,
+                "investment": budget * 0.85,
+                "demand": "High",
+                "price_trend": 1,
+                "harvest_time": "3-4",
+                "resilience": "8",
+                "sowing_window": "June-July",
+                "critical_months": "August",
+                "weather_impact": {"Temperature": "Optimal between 18-27°C", "Rainfall": "Moderate rainfall required"},
+                "tips": ["Use hybrid seeds", "Practice intercropping"],
+                "warnings": ["Susceptible to stem borer"]
+            })
+    
+    return recommendations
+
+# =========================
+# Gemini helper
+# =========================
+def get_gemini_response(user_query, context=""):
+    """Get response from Gemini with agricultural context."""
+    if not gemini_model:
+        return "⚠️ AI advisor is currently unavailable. Please try again later or contact support."
+    try:
+        system_prompt = f"""
+You are KrishiMitra AI, an agricultural expert assistant for Indian farmers.
+Provide practical, actionable advice in simple language.
+
+Context: {context}
+
+Guidelines:
+- Focus on Indian agricultural practices and conditions
+- Recommend solutions suitable for small and marginal farmers
+- Suggest cost-effective and sustainable approaches
+- Mention specific varieties suitable for Indian regions when possible
+- Include both traditional wisdom and modern techniques
+- Warn about potential risks and precautions
+- Be concise but comprehensive
+- Use metric units and Indian currency (₹)
+- Consider seasonal variations in India
+
+If the question is not related to agriculture, politely redirect to farming topics.
+"""
+        full_prompt = f"{system_prompt}\n\nFarmer's question: {user_query}"
+        response = gemini_model.generate_content(full_prompt)
+        return getattr(response, "text", "No response generated.")
+    except Exception as e:
+        logger.error(f"Gemini API error: {e}")
+        return f"❌ Error connecting to AI service: {str(e)}. Please try again later."
+
 # =========================
 # Model & Encoder Load
 # =========================
@@ -273,13 +427,29 @@ def load_model_and_encoder():
         try:
             named = getattr(model, "named_steps", {})
             if named:
-                for name, step in named.items():
+                for _, step in named.items():
                     if hasattr(step, "classes_") and getattr(step, "classes_", None) is not None:
                         encoder = step
                         break
         except Exception:
             logger.debug("No named_steps or couldn't inspect pipeline for encoder")
 
+        # Test the model with sample data
+        if model is not None:
+            feature_order = ["N", "P", "K", "temperature", "humidity", "ph", "rainfall"]
+            sample_features = pd.DataFrame([{
+                "N": 50, "P": 50, "K": 50,
+                "temperature": 25, "humidity": 60,
+                "ph": 6.5, "rainfall": 100
+            }])[feature_order]
+            
+            try:
+                test_pred = model.predict(sample_features)
+                logger.info("Model test prediction successful")
+            except Exception as e:
+                logger.error(f"Model test prediction failed: {e}")
+                return None, None
+                
         # final fallback: None (app will handle no encoder case)
         return model, encoder
     except Exception as e:
@@ -328,8 +498,8 @@ except Exception:
 # =========================
 selected_tab = option_menu(
     None,
-    ["Get Recommendations", "Crop Calendar", "Crop Diseases", "Farming Guidelines"],
-    icons=['🎯', '🗓️', '🦠', '📖'],
+    ["Get Recommendations", "Crop Calendar", "Crop Diseases", "Farming Guidelines", "AI Crop Advisor"],
+    icons=['🎯', '🗓️', '🦠', '📖', '🤖'],
     menu_icon="cast",
     default_index=0,
     orientation="horizontal"
@@ -401,106 +571,170 @@ if selected_tab == "Get Recommendations":
                     try:
                         with st.spinner("🤖 AI is analyzing best crops..."):
                             pred_raw = model.predict(features)[0]
+                            
+                        # decode prediction if label encoder available
+                        if label_encoder:
+                            try:
+                                prediction = label_encoder.inverse_transform([pred_raw])[0]
+                            except Exception:
+                                try:
+                                    prediction = label_encoder.inverse_transform([int(pred_raw)])[0]
+                                except Exception:
+                                    prediction = str(pred_raw)
+                        else:
+                            prediction = str(pred_raw)
+
+                        # get recommendations (plugin or fallback)
+                        try:
+                            recommendations = get_crop_recommendations(prediction, land_area, budget)
+                        except Exception:
+                            logger.exception("Recommendation function failed; using fallback single recommendation")
+                            recommendations = [{
+                                "name": prediction,
+                                "roi": budget * 1.2,
+                                "profit": budget * 0.7,
+                                "investment": budget * 0.6,
+                                "demand": "High",
+                                "price_trend": 1,
+                                "harvest_time": "3-4",
+                                "resilience": "7",
+                                "sowing_window": "June-July",
+                                "critical_months": "August",
+                                "weather_impact": {"Temperature": "20-30°C", "Rainfall": "Moderate"},
+                                "tips": ["Use organic fertilizers", "Maintain proper spacing"],
+                                "warnings": ["Avoid waterlogging"]
+                            }]
+
+                        st.success("✅ Analysis complete! Here are your best crop options:")
+
+                        for idx, crop in enumerate(recommendations, 1):
+                            with st.expander(f"{idx}. {crop.get('name', 'Unknown Crop')} 🌱", expanded=(idx == 1)):
+                                col_img, col_info = st.columns([1, 2])
+                                with col_img:
+                                    safe_image_show(crop.get("name", ""))
+                                with col_info:
+                                    st.subheader(crop.get("name", "Crop"))
+                                    st.write(f"**Best for:** {pin_code} region")
+                                    st.write(f"**Land Area:** {land_area} acres")
+
+                                # Financial Overview
+                                st.subheader("💰 Financial Overview")
+                                fin1, fin2, fin3 = st.columns(3)
+                                with fin1:
+                                    st.metric("Expected ROI", fmt_money(crop.get("roi", 0)))
+                                    st.metric("Profit Potential", fmt_money(crop.get("profit", 0)))
+                                with fin2:
+                                    inv = crop.get("investment", 0)
+                                    st.metric("Investment Needed", fmt_money(inv))
+                                    st.metric("Per Acre Cost", fmt_money(inv / max(land_area, 0.1)))
+                                with fin3:
+                                    st.metric("Market Demand", crop.get("demand", "—"))
+                                    trend = crop.get("price_trend", 0)
+                                    trend_icon = "📈" if trend > 0 else "📉" if trend < 0 else "➡️"
+                                    st.metric("Price Trend", f"{trend_icon} {'Rising' if trend > 0 else 'Falling' if trend < 0 else 'Stable'}")
+
+                                # Timeline & Season Info
+                                st.subheader("🗓️ Growth Timeline")
+                                time1, time2 = st.columns(2)
+                                with time1:
+                                    st.metric("Time to Harvest", f"{crop.get('harvest_time', '—')} months")
+                                    st.metric("Resilience Score", f"{crop.get('resilience', '—')}/10")
+                                with time2:
+                                    st.write(f"**Best Sowing Window:** {crop.get('sowing_window', '—')}")
+                                    st.write(f"**Critical Months:** {crop.get('critical_months', '—')}")
+
+                                # Weather Suitability
+                                st.subheader("🌤️ Weather Suitability")
+                                weather_impact = crop.get("weather_impact", {})
+                                if weather_impact:
+                                    for factor, impact in weather_impact.items():
+                                        st.write(f"• **{factor}:** {impact}")
+                                else:
+                                    st.info("Weather impact data not available.")
+
+                                # Cultivation Guidelines
+                                st.subheader("🌱 Cultivation Guidelines")
+                                guide1, guide2 = st.columns(2)
+                                with guide1:
+                                    st.write("✅ **Best Practices:**")
+                                    for tip in crop.get("tips", []):
+                                        st.write(f"• {tip}")
+                                with guide2:
+                                    st.write("❌ **Things to Avoid:**")
+                                    for warn in crop.get("warnings", []):
+                                        st.write(f"• {warn}")
+
                     except Exception as e:
                         logger.exception("Prediction error")
                         st.error(f"❌ Prediction failed: {e}")
-                        pred_raw = None
+                        
+                        if DEBUG:
+                            st.code(f"Error details: {str(e)}")
+                            st.code(f"Features: {features}")
+                        
+                        st.info("Using fallback recommendations based on your inputs...")
+                        
+                        # Use fallback recommendations
+                        recommendations = get_fallback_recommendations(n, p, k, ph, temp, humidity, rainfall, land_area, budget)
+                        
+                        st.success("✅ Here are some general crop recommendations based on your inputs:")
+                        
+                        for idx, crop in enumerate(recommendations, 1):
+                            with st.expander(f"{idx}. {crop.get('name', 'Unknown Crop')} 🌱", expanded=(idx == 1)):
+                                col_img, col_info = st.columns([1, 2])
+                                with col_img:
+                                    safe_image_show(crop.get("name", ""))
+                                with col_info:
+                                    st.subheader(crop.get("name", "Crop"))
+                                    st.write(f"**Best for:** {pin_code} region")
+                                    st.write(f"**Land Area:** {land_area} acres")
 
-                    if pred_raw is None:
-                        st.stop()
+                                # Financial Overview
+                                st.subheader("💰 Financial Overview")
+                                fin1, fin2, fin3 = st.columns(3)
+                                with fin1:
+                                    st.metric("Expected ROI", fmt_money(crop.get("roi", 0)))
+                                    st.metric("Profit Potential", fmt_money(crop.get("profit", 0)))
+                                with fin2:
+                                    inv = crop.get("investment", 0)
+                                    st.metric("Investment Needed", fmt_money(inv))
+                                    st.metric("Per Acre Cost", fmt_money(inv / max(land_area, 0.1)))
+                                with fin3:
+                                    st.metric("Market Demand", crop.get("demand", "—"))
+                                    trend = crop.get("price_trend", 0)
+                                    trend_icon = "📈" if trend > 0 else "📉" if trend < 0 else "➡️"
+                                    st.metric("Price Trend", f"{trend_icon} {'Rising' if trend > 0 else 'Falling' if trend < 0 else 'Stable'}")
 
-                    # decode prediction if label encoder available
-                    prediction = None
-                    if label_encoder:
-                        try:
-                            prediction = label_encoder.inverse_transform([pred_raw])[0]
-                        except Exception:
-                            try:
-                                prediction = label_encoder.inverse_transform([int(pred_raw)])[0]
-                            except Exception:
-                                prediction = str(pred_raw)
-                    else:
-                        prediction = str(pred_raw)
+                                # Timeline & Season Info
+                                st.subheader("🗓️ Growth Timeline")
+                                time1, time2 = st.columns(2)
+                                with time1:
+                                    st.metric("Time to Harvest", f"{crop.get('harvest_time', '—')} months")
+                                    st.metric("Resilience Score", f"{crop.get('resilience', '—')}/10")
+                                with time2:
+                                    st.write(f"**Best Sowing Window:** {crop.get('sowing_window', '—')}")
+                                    st.write(f"**Critical Months:** {crop.get('critical_months', '—')}")
 
-                    # get recommendations (plugin or fallback)
-                    try:
-                        recommendations = get_crop_recommendations(prediction, land_area, budget)
-                    except Exception:
-                        logger.exception("Recommendation function failed; using fallback single recommendation")
-                        recommendations = [{
-                            "name": prediction,
-                            "roi": budget * 1.2,
-                            "profit": budget * 0.7,
-                            "investment": budget * 0.6,
-                            "demand": "High",
-                            "price_trend": 1,
-                            "harvest_time": "3-4",
-                            "resilience": "7",
-                            "sowing_window": "June-July",
-                            "critical_months": "August",
-                            "weather_impact": {"Temperature": "20-30°C", "Rainfall": "Moderate"},
-                            "tips": ["Use organic fertilizers", "Maintain proper spacing"],
-                            "warnings": ["Avoid waterlogging"]
-                        }]
+                                # Weather Suitability
+                                st.subheader("🌤️ Weather Suitability")
+                                weather_impact = crop.get("weather_impact", {})
+                                if weather_impact:
+                                    for factor, impact in weather_impact.items():
+                                        st.write(f"• **{factor}:** {impact}")
+                                else:
+                                    st.info("Weather impact data not available.")
 
-                    st.success("✅ Analysis complete! Here are your best crop options:")
-
-                    for idx, crop in enumerate(recommendations, 1):
-                        with st.expander(f"{idx}. {crop.get('name', 'Unknown Crop')} 🌱", expanded=(idx == 1)):
-                            col_img, col_info = st.columns([1, 2])
-                            with col_img:
-                                safe_image_show(crop.get("name", ""))
-                            with col_info:
-                                st.subheader(crop.get("name", "Crop"))
-                                st.write(f"**Best for:** {pin_code} region")
-                                st.write(f"**Land Area:** {land_area} acres")
-
-                            # Financial Overview
-                            st.subheader("💰 Financial Overview")
-                            fin1, fin2, fin3 = st.columns(3)
-                            with fin1:
-                                st.metric("Expected ROI", fmt_money(crop.get("roi", 0)))
-                                st.metric("Profit Potential", fmt_money(crop.get("profit", 0)))
-                            with fin2:
-                                inv = crop.get("investment", 0)
-                                st.metric("Investment Needed", fmt_money(inv))
-                                st.metric("Per Acre Cost", fmt_money(inv / max(land_area, 0.1)))
-                            with fin3:
-                                st.metric("Market Demand", crop.get("demand", "—"))
-                                trend = crop.get("price_trend", 0)
-                                trend_icon = "📈" if trend > 0 else "📉" if trend < 0 else "➡️"
-                                st.metric("Price Trend", f"{trend_icon} {'Rising' if trend > 0 else 'Falling' if trend < 0 else 'Stable'}")
-
-                            # Timeline & Season Info
-                            st.subheader("🗓️ Growth Timeline")
-                            time1, time2 = st.columns(2)
-                            with time1:
-                                st.metric("Time to Harvest", f"{crop.get('harvest_time', '—')} months")
-                                st.metric("Resilience Score", f"{crop.get('resilience', '—')}/10")
-                            with time2:
-                                st.write(f"**Best Sowing Window:** {crop.get('sowing_window', '—')}")
-                                st.write(f"**Critical Months:** {crop.get('critical_months', '—')}")
-
-                            # Weather Suitability
-                            st.subheader("🌤️ Weather Suitability")
-                            weather_impact = crop.get("weather_impact", {})
-                            if weather_impact:
-                                for factor, impact in weather_impact.items():
-                                    st.write(f"• **{factor}:** {impact}")
-                            else:
-                                st.info("Weather impact data not available.")
-
-                            # Cultivation Guidelines
-                            st.subheader("🌱 Cultivation Guidelines")
-                            guide1, guide2 = st.columns(2)
-                            with guide1:
-                                st.write("✅ **Best Practices:**")
-                                for tip in crop.get("tips", []):
-                                    st.write(f"• {tip}")
-                            with guide2:
-                                st.write("❌ **Things to Avoid:**")
-                                for warn in crop.get("warnings", []):
-                                    st.write(f"• {warn}")
+                                # Cultivation Guidelines
+                                st.subheader("🌱 Cultivation Guidelines")
+                                guide1, guide2 = st.columns(2)
+                                with guide1:
+                                    st.write("✅ **Best Practices:**")
+                                    for tip in crop.get("tips", []):
+                                        st.write(f"• {tip}")
+                                with guide2:
+                                    st.write("❌ **Things to Avoid:**")
+                                    for warn in crop.get("warnings", []):
+                                        st.write(f"• {warn}")
 
                     # PDF Export if supported
                     if generate_crop_pdf:
@@ -633,7 +867,7 @@ elif selected_tab == "Crop Diseases":
 # =========================
 # TAB 4: Farming Guidelines
 # =========================
-else:
+elif selected_tab == "Farming Guidelines":
     st.header("📖 Farming Best Practices & Guidelines")
     topics = {
         "🌡️ Weather Considerations": [
@@ -671,6 +905,116 @@ else:
         with st.expander(topic):
             for guideline in guidelines:
                 st.write(f"• {guideline}")
+
+# =========================
+# TAB 5: AI Crop Advisor
+# =========================
+elif selected_tab == "AI Crop Advisor":
+    st.header("🤖 AI Crop Advisor")
+    st.info("""
+    Ask any question about crop cultivation, pest management, weather impact, 
+    market trends, or farming techniques. Our AI expert will provide personalized advice.
+    """)
+
+    # Initialize chat history
+    if "gemini_messages" not in st.session_state:
+        st.session_state.gemini_messages = []
+
+    # Display chat messages
+    for message in st.session_state.gemini_messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    # Quick suggestion buttons
+    st.subheader("💡 Quick Questions")
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        if st.button("🌾 Best crops for my soil"):
+            prompt = "What are the best crops for clay soil with pH 6.8?"
+            st.session_state.gemini_messages.append({"role": "user", "content": prompt})
+            response = get_gemini_response(prompt)
+            st.session_state.gemini_messages.append({"role": "assistant", "content": response})
+            st.rerun()
+
+    with col2:
+        if st.button("🐛 Pest control tips"):
+            prompt = "How to control aphids in tomato plants organically?"
+            st.session_state.gemini_messages.append({"role": "user", "content": prompt})
+            response = get_gemini_response(prompt)
+            st.session_state.gemini_messages.append({"role": "assistant", "content": response})
+            st.rerun()
+
+    with col3:
+        if st.button("💧 Water management"):
+            prompt = "What's the best irrigation schedule for wheat in Rajasthan?"
+            st.session_state.gemini_messages.append({"role": "user", "content": prompt})
+            response = get_gemini_response(prompt)
+            st.session_state.gemini_messages.append({"role": "assistant", "content": response})
+            st.rerun()
+
+    # Chat input (user free typing)
+    prompt = st.chat_input("Ask your farming question...")
+    if prompt:
+        # Add user message
+        st.session_state.gemini_messages.append({"role": "user", "content": prompt})
+
+        # Get context from last few messages for continuity
+        context_parts = []
+        for msg in st.session_state.gemini_messages[-3:]:
+            context_parts.append(f"{msg['role']}: {msg['content']}")
+        context = "\n".join(context_parts)
+
+        # Get AI response
+        with st.chat_message("assistant"):
+            with st.spinner("🤖 Thinking..."):
+                response = get_gemini_response(prompt, context)
+            st.markdown(response)
+
+        # Add assistant response
+        st.session_state.gemini_messages.append({"role": "assistant", "content": response})
+
+    # Clear chat button
+    if st.button("🗑️ Clear Conversation", use_container_width=True):
+        st.session_state.gemini_messages = []
+        st.rerun()
+
+    # Example questions section
+    with st.expander("📋 Example Questions to Ask"):
+        st.write("""
+**Crop Specific:**
+- "How to increase yield in rice cultivation?"
+- "What are the best wheat varieties for Punjab?"
+- "How to prevent fungal diseases in grapes?"
+
+**Soil & Nutrition:**
+- "What organic fertilizers work best for vegetable farming?"
+- "How to improve sandy soil for agriculture?"
+- "When should I apply NPK fertilizer to maize?"
+
+**Pest & Disease:**
+- "Natural ways to control whiteflies in cotton"
+- "How to identify and treat citrus canker?"
+- "Preventive measures for blast disease in rice"
+
+**Market & Economics:**
+- "Current market trends for soybean in Maharashtra"
+- "How to get better prices for my produce?"
+- "Government schemes for organic farming"
+
+**Weather & Climate:**
+- "Crop protection during unseasonal rains"
+- "Drought-resistant crops for dry regions"
+- "Managing crops during heatwaves"
+""")
+
+    # Disclaimer
+    st.warning("""
+⚠️ **Disclaimer:** This AI advice is for informational purposes only. 
+Always consult local agricultural experts for site-specific recommendations. 
+Weather, soil conditions, and local regulations may affect implementation.
+""")
+
 
 # =========================
 # FOOTER
