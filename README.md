@@ -45,7 +45,7 @@ KrishiMitra AI is a comprehensive agricultural decision support system that prov
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/your-username/KrishiMitraAI.git
+   git clone https://github.com/jaygautam-creator/KrishiMitraAI.git
    cd KrishiMitraAI
    ```
 
@@ -187,7 +187,7 @@ python convert_model.py
 ## 🤝 Support & Community
 
 ### Getting Help
-- 📧 **Email**: [Support Email]
+- 📧 **Email**: [jaygautam561@gmail.com]
 - 🐛 **Issues**: Create GitHub issues for bugs
 - 💬 **Discussions**: Community discussions welcome
 
@@ -236,31 +236,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 👥 Authors
 
-**Vaibhav Chaudhary**
-
-
-=======
-- GitHub: [@vaibhavchau37](https://github.com/vaibhavchau37)
-- Project: KrishiMitra AI - Intelligent Crop Recommendation System
-
----
-
-## 🙏 Acknowledgments
-
-- **ICAR** for agricultural research and data
-- **Indian Agricultural Universities** for crop research
-- **Open Source Community** for tools and libraries
-- **Indian Farmers** for inspiration and feedback
-
----
-
-## 📞 Support
-
-- **Issues**: [GitHub Issues](https://github.com/vaibhavchau37/KrishiMitraAI/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/vaibhavchau37/KrishiMitraAI/discussions)
-- **Email**: Contact through GitHub profile
-
----
+**JAY GAUTAM**
 
 <div align="center">
 
@@ -269,4 +245,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 *Empowering Agriculture through AI*
 
 </div>
+
 
