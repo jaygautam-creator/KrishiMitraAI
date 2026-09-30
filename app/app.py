@@ -115,7 +115,7 @@ logger = logging.getLogger("krishimitra")
 
 # Page Config (must be the first Streamlit UI call)
 st.set_page_config(
-    page_title="KrishIMitra AI",
+    page_title="KrishiMitra AI",
     page_icon="🌱",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -265,6 +265,73 @@ st.markdown("""
         margin: 10px 0;
         border-radius: 4px;
         color: #c62828;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
+    :root {
+        --km-green: #2E8B57;
+        --km-green-2: #3CB371;
+        --km-card: rgba(46,139,87,0.08);
+        --km-border: rgba(46,139,87,0.28);
+    }
+    .block-container { padding-top: 2rem; max-width: 1200px; }
+    #MainMenu, footer { visibility: hidden; }
+
+    /* Hero header */
+    .main-header {
+        font-size: 2.6rem; font-weight: 800; margin-bottom: 0;
+        background: linear-gradient(90deg, #2E8B57, #7bd88f);
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .sub-header { font-size: 1.15rem; font-weight: 400; opacity: .85; margin-top: .2rem; margin-bottom: 1.2rem; }
+
+    /* Theme-aware cards (readable in dark and light mode) */
+    .card, .disease-card, .prevention-card, .treatment-card, .farmer-profile, .community-advice {
+        background-color: var(--km-card) !important;
+        border: 1px solid var(--km-border);
+        color: inherit !important;
+        border-radius: 12px;
+    }
+    .government-scheme { background-color: rgba(33,150,243,0.10) !important; color: inherit !important; }
+    .government-scheme h4, .government-scheme p { color: inherit !important; }
+
+    /* Metric tiles */
+    div[data-testid="stMetric"] {
+        background: var(--km-card); border: 1px solid var(--km-border);
+        border-radius: 12px; padding: 12px 14px;
+    }
+    div[data-testid="stMetricLabel"] { opacity: .8; }
+
+    /* Expanders and forms */
+    div[data-testid="stExpander"] { border: 1px solid var(--km-border); border-radius: 12px; }
+    div[data-testid="stForm"] { border: 1px solid var(--km-border); border-radius: 14px; padding: 1.2rem; }
+
+    /* Primary buttons */
+    .stButton > button, div[data-testid="stFormSubmitButton"] > button {
+        border-radius: 10px; font-weight: 600; border: 1px solid var(--km-border);
+        transition: transform .08s ease, box-shadow .15s ease;
+    }
+    .stButton > button:hover, div[data-testid="stFormSubmitButton"] > button:hover {
+        border-color: var(--km-green); box-shadow: 0 2px 10px rgba(46,139,87,.25); transform: translateY(-1px);
+    }
+
+    /* Top-pick banner and crop summary cards */
+    .km-top {
+        background: linear-gradient(135deg, rgba(46,139,87,.22), rgba(123,216,143,.10));
+        border: 1px solid var(--km-border); border-radius: 16px; padding: 18px 22px; margin: 6px 0 16px 0;
+    }
+    .km-top h3 { margin: 0 0 4px 0; }
+    .km-top p { margin: 0; opacity: .85; }
+    .km-chip {
+        display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .8rem; font-weight: 600;
+        background: var(--km-green); color: #fff; margin-right: 6px;
+    }
+    @media (max-width: 640px) {
+        .main-header { font-size: 1.9rem; }
+        .block-container { padding-left: 1rem; padding-right: 1rem; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -1530,10 +1597,18 @@ selected_tab = option_menu(
     None,
     [t("get_recommendations"), t("crop_calendar"), t("crop_diseases"), t("farming_guidelines"),
      t("ai_assistant"), t("crop_recommendation_ai"), t("fertilizer_guide"), t("government_schemes"), t("community")],
-    icons=["🌱", "📅", "🦠", "📋", "🤖", "🧠", "🧪", "🏛️", "👥"],
+    icons=["geo-alt", "calendar3", "bug", "journal-text", "robot", "cpu", "droplet", "bank", "people"],
     menu_icon="cast",
     default_index=0,
-    orientation="horizontal"
+    orientation="horizontal",
+    styles={
+        "container": {"padding": "6px", "background-color": "rgba(46,139,87,0.10)", "border-radius": "14px",
+                      "border": "1px solid rgba(46,139,87,0.28)"},
+        "icon": {"font-size": "15px"},
+        "nav-link": {"font-size": "13px", "text-align": "center", "margin": "2px", "border-radius": "10px",
+                     "--hover-color": "rgba(46,139,87,0.22)"},
+        "nav-link-selected": {"background-color": "#2E8B57", "color": "white", "font-weight": "600"},
+    }
 )
 
 # Main application with error handling
@@ -1646,6 +1721,28 @@ try:
                             st.success(f"✔ Complete Image Collection: All {total_crops} crop images available! ({available_images} total images)")
                         else:
                             st.info(f"ℹ️ Image Status: {available_images}/{total_crops} crop images available. Missing images will show as styled placeholders.")
+
+                        # Summary: top pick banner + side-by-side comparison
+                        if recommendations:
+                            top = recommendations[0]
+                            top_conf = top.get("confidence")
+                            conf_chip = f"<span class='km-chip'>{top_conf*100:.0f}% match</span>" if top_conf is not None else ""
+                            st.markdown(
+                                f"<div class='km-top'><h3>🏆 Best fit: {str(top['name']).title()}</h3>"
+                                f"<p>{conf_chip}Est. profit ₹{top.get('profit', 0):,.0f} on {land_area:g} acre(s) "
+                                f"· Investment ₹{top.get('investment', 0):,.0f} · Sow: {top.get('sowing_window', '-')}</p></div>",
+                                unsafe_allow_html=True,
+                            )
+                            if len(recommendations) > 1:
+                                cmp_df = pd.DataFrame([{
+                                    "Crop": str(c["name"]).title(),
+                                    "Match": f"{c['confidence']*100:.0f}%" if c.get("confidence") is not None else "-",
+                                    "Investment (₹)": f"{c.get('investment', 0):,.0f}",
+                                    "Est. profit (₹)": f"{c.get('profit', 0):,.0f}",
+                                    "Harvest (months)": c.get("harvest_time", "-"),
+                                    "Demand": c.get("demand", "-"),
+                                } for c in recommendations])
+                                st.dataframe(cmp_df, hide_index=True, use_container_width=True)
 
                         # Display each crop recommendation
                         for idx, crop in enumerate(recommendations, 1):
