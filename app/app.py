@@ -192,17 +192,6 @@ st.markdown("""
         border: 1px solid #e0e0e0;
     }
 
-    @media (prefers-color-scheme: dark) {
-        .bot-message {
-            background-color: #2c2c2c;
-            color: #ffffff;
-        }
-        .user-message {
-            background-color: #065446;
-            color: #ffffff;
-        }
-    }
-
     .alert-box {
         background-color: #fff3cd;
         border-left: 4px solid #ffc107;
@@ -272,65 +261,101 @@ st.markdown("""
 st.markdown("""
 <style>
     :root {
-        --km-green: #2E8B57;
-        --km-green-2: #3CB371;
-        --km-card: rgba(46,139,87,0.08);
-        --km-border: rgba(46,139,87,0.28);
+        --km-green: #2F7D32;
+        --km-green-2: #66A94D;
+        --km-leaf: #E4F0D4;
+        --km-cream: #FBF8EF;
+        --km-wheat: #E8B93C;
+        --km-soil: #6B4F2A;
+        --km-card: #FFFFFF;
+        --km-border: #D5E4BF;
+        --km-text: #26361F;
     }
-    .block-container { padding-top: 2rem; max-width: 1200px; }
+    .stApp {
+        background:
+            radial-gradient(circle at 92% 4%, rgba(232,185,60,.18), transparent 32%),
+            linear-gradient(180deg, #F6FAEE 0%, #FBF8EF 45%, #F3F8E8 100%);
+        color: var(--km-text);
+    }
+    .block-container { padding-top: 1.4rem; max-width: 1200px; }
     #MainMenu, footer { visibility: hidden; }
+    header[data-testid="stHeader"] { background: transparent; }
 
-    /* Hero header */
-    .main-header {
-        font-size: 2.6rem; font-weight: 800; margin-bottom: 0;
-        background: linear-gradient(90deg, #2E8B57, #7bd88f);
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    /* Hero banner */
+    .km-hero {
+        position: relative; overflow: hidden; text-align: center;
+        background:
+            linear-gradient(160deg, #2F7D32 0%, #4C9A3B 55%, #8DBF4A 100%);
+        border-radius: 22px; padding: 30px 20px 26px 20px; margin-bottom: 18px;
+        box-shadow: 0 8px 24px rgba(47,125,50,.25);
     }
-    .sub-header { font-size: 1.15rem; font-weight: 400; opacity: .85; margin-top: .2rem; margin-bottom: 1.2rem; }
+    .km-hero::before { content: "🌾  🌱  🌾  🌿  🌾"; position: absolute; left: 0; right: 0; bottom: -6px;
+        font-size: 2.2rem; letter-spacing: 1.1rem; opacity: .22; white-space: nowrap; }
+    .km-hero::after { content: "☀️"; position: absolute; right: 26px; top: 14px; font-size: 2.2rem; }
+    .main-header { font-size: 2.8rem; font-weight: 800; color: #fff !important; margin: 0; letter-spacing: .5px;
+        -webkit-text-fill-color: #fff; }
+    .sub-header { font-size: 1.1rem; font-weight: 400; color: #F3FAE6 !important; margin: .3rem 0 0 0; }
 
-    /* Theme-aware cards (readable in dark and light mode) */
+    h1, h2, h3, h4 { color: var(--km-green) !important; }
+
+    /* Cards */
     .card, .disease-card, .prevention-card, .treatment-card, .farmer-profile, .community-advice {
         background-color: var(--km-card) !important;
         border: 1px solid var(--km-border);
-        color: inherit !important;
-        border-radius: 12px;
+        border-left: 5px solid var(--km-green-2);
+        color: var(--km-text) !important;
+        border-radius: 14px;
+        box-shadow: 0 2px 8px rgba(80,110,50,.08);
     }
-    .government-scheme { background-color: rgba(33,150,243,0.10) !important; color: inherit !important; }
-    .government-scheme h4, .government-scheme p { color: inherit !important; }
+    .government-scheme { background-color: #F1F7FF !important; color: var(--km-text) !important; }
+    .government-scheme h4, .government-scheme p { color: var(--km-text) !important; }
+    .bot-message { background: #fff; color: var(--km-text); }
+    .user-message { background: var(--km-leaf); color: var(--km-text); }
+    .alert-box { background: #FFF6DA; border-left: 4px solid var(--km-wheat); color: var(--km-text); }
 
     /* Metric tiles */
     div[data-testid="stMetric"] {
         background: var(--km-card); border: 1px solid var(--km-border);
-        border-radius: 12px; padding: 12px 14px;
+        border-top: 4px solid var(--km-wheat);
+        border-radius: 14px; padding: 12px 14px; box-shadow: 0 2px 8px rgba(80,110,50,.08);
     }
-    div[data-testid="stMetricLabel"] { opacity: .8; }
+    div[data-testid="stMetricLabel"] p { color: var(--km-soil); font-weight: 600; }
+    div[data-testid="stMetricValue"] { color: var(--km-green); }
 
-    /* Expanders and forms */
-    div[data-testid="stExpander"] { border: 1px solid var(--km-border); border-radius: 12px; }
-    div[data-testid="stForm"] { border: 1px solid var(--km-border); border-radius: 14px; padding: 1.2rem; }
+    /* Expanders, forms, sidebar */
+    div[data-testid="stExpander"] { background: rgba(255,255,255,.75); border: 1px solid var(--km-border); border-radius: 14px; }
+    div[data-testid="stForm"] { background: rgba(255,255,255,.8); border: 1px solid var(--km-border); border-radius: 18px; padding: 1.3rem; }
+    section[data-testid="stSidebar"] { background: #EAF3DC; border-right: 1px solid var(--km-border); }
 
-    /* Primary buttons */
+    /* Inputs */
+    div[data-baseweb="input"] input, div[data-baseweb="select"] > div, textarea { border-radius: 10px !important; }
+
+    /* Buttons */
     .stButton > button, div[data-testid="stFormSubmitButton"] > button {
-        border-radius: 10px; font-weight: 600; border: 1px solid var(--km-border);
-        transition: transform .08s ease, box-shadow .15s ease;
+        border-radius: 12px; font-weight: 700; border: 1px solid var(--km-green);
+        background: #fff; color: var(--km-green); transition: all .15s ease;
     }
     .stButton > button:hover, div[data-testid="stFormSubmitButton"] > button:hover {
-        border-color: var(--km-green); box-shadow: 0 2px 10px rgba(46,139,87,.25); transform: translateY(-1px);
+        background: var(--km-green); color: #fff; box-shadow: 0 4px 14px rgba(47,125,50,.3); transform: translateY(-1px);
     }
+    div[data-testid="stFormSubmitButton"] > button { background: var(--km-green); color: #fff; }
 
-    /* Top-pick banner and crop summary cards */
+    /* Top-pick banner */
     .km-top {
-        background: linear-gradient(135deg, rgba(46,139,87,.22), rgba(123,216,143,.10));
-        border: 1px solid var(--km-border); border-radius: 16px; padding: 18px 22px; margin: 6px 0 16px 0;
+        background: linear-gradient(135deg, #FFF4CC 0%, #E9F5D3 100%);
+        border: 1px solid #E5D48A; border-left: 6px solid var(--km-wheat);
+        border-radius: 16px; padding: 18px 22px; margin: 8px 0 16px 0;
+        box-shadow: 0 3px 12px rgba(200,160,40,.15);
     }
-    .km-top h3 { margin: 0 0 4px 0; }
-    .km-top p { margin: 0; opacity: .85; }
-    .km-chip {
-        display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .8rem; font-weight: 600;
-        background: var(--km-green); color: #fff; margin-right: 6px;
-    }
+    .km-top h3 { margin: 0 0 6px 0; color: var(--km-soil) !important; }
+    .km-top p { margin: 0; color: var(--km-text); }
+    .km-chip { display: inline-block; padding: 2px 11px; border-radius: 999px; font-size: .8rem; font-weight: 700;
+        background: var(--km-green); color: #fff; margin-right: 8px; }
+
     @media (max-width: 640px) {
         .main-header { font-size: 1.9rem; }
+        .km-hero { padding: 22px 12px; }
+        .km-hero::after { display: none; }
         .block-container { padding-left: 1rem; padding-right: 1rem; }
     }
 </style>
@@ -635,8 +660,11 @@ def t(key):
     lang = st.session_state.language 
     return TRANSLATIONS.get(lang, TRANSLATIONS["English"]).get(key, key) 
 
-st.markdown(f"<h1 class='main-header'>{t('main_header')}</h1>", unsafe_allow_html=True)
-st.markdown(f"<h2 class='sub-header'>{t('sub_header')}</h2>", unsafe_allow_html=True)
+st.markdown(
+    f"<div class='km-hero'><h1 class='main-header'>🌱 {t('main_header')}</h1>"
+    f"<p class='sub-header'>{t('sub_header')}</p></div>",
+    unsafe_allow_html=True,
+)
 
 # Paths & Constants
 BASE_DIR = Path(__file__).resolve().parent
@@ -1602,12 +1630,12 @@ selected_tab = option_menu(
     default_index=0,
     orientation="horizontal",
     styles={
-        "container": {"padding": "6px", "background-color": "rgba(46,139,87,0.10)", "border-radius": "14px",
-                      "border": "1px solid rgba(46,139,87,0.28)"},
+        "container": {"padding": "6px", "background-color": "#FFFFFF", "border-radius": "16px",
+                      "border": "1px solid #D5E4BF", "box-shadow": "0 2px 8px rgba(80,110,50,.10)"},
         "icon": {"font-size": "15px"},
         "nav-link": {"font-size": "13px", "text-align": "center", "margin": "2px", "border-radius": "10px",
-                     "--hover-color": "rgba(46,139,87,0.22)"},
-        "nav-link-selected": {"background-color": "#2E8B57", "color": "white", "font-weight": "600"},
+                     "color": "#26361F", "--hover-color": "#E4F0D4"},
+        "nav-link-selected": {"background-color": "#2F7D32", "color": "white", "font-weight": "700"},
     }
 )
 
