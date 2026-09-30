@@ -1520,8 +1520,9 @@ with st.sidebar:
             comments = st.text_area(t("additional_comments"))
             if st.button(t("submit_feedback")):
                 # Save feedback to a file
-                with open("feedback.csv", "a") as f:
-                    f.write(f"{datetime.now()},{rating},{comments}\n")
+                import csv
+                with open(BASE_DIR / "feedback.csv", "a", newline="", encoding="utf-8") as f:
+                    csv.writer(f).writerow([datetime.now().isoformat(timespec="seconds"), rating, comments])
                 st.success(t("thank_you_feedback"))
 
 # Navigation - Added new tabs
@@ -1651,7 +1652,7 @@ try:
                             crop_name = crop.get('name', 'Unknown Crop')
                             conf = crop.get("confidence")
                             conf_txt = f" - {conf*100:.0f}% match" if conf is not None else ""
-                            with st.expander(f"{idx}. {crop_name}{conf_txt} (PIN: {pin_code})", expanded=(idx == 1)):
+                            with st.expander(f"{idx}. {str(crop_name).title()}{conf_txt} (PIN: {pin_code})", expanded=(idx == 1)):
                                 # Clear pincode identification
                                 st.info(t("specifically_for").format(pin_code=pin_code))
 
@@ -1659,7 +1660,9 @@ try:
                                 with col_img:
                                     safe_image_show(crop_name)
                                 with col_info:
-                                    st.subheader(f"{crop_name} for PIN {pin_code}")
+                                    st.subheader(f"{str(crop_name).title()} for PIN {pin_code}")
+                                    if crop.get("confidence") is not None:
+                                        st.progress(min(max(float(crop["confidence"]), 0.0), 1.0), text=f"Model match: {crop['confidence']*100:.0f}%")
                                     st.write(t("specifically_suited").format(pin_code=pin_code))
                                     st.write(t("your_land_area").format(land_area=land_area))
 
