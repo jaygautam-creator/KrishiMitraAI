@@ -64,3 +64,6 @@ KRISHIMITRAAI__FULL_BACKUP__DO_NOT_TOUCH/
 backup/extra_merged_files/
 .qodo/
 feedback.csv
+
+# The trained model is required to run the app
+!crop_model.pkl
