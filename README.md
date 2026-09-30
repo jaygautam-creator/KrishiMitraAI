@@ -1,272 +1,95 @@
 # 🌾 KrishiMitra AI
 
-**Intelligent Crop Recommendation System for Indian Farmers**
+**Crop recommendations and farming help for Indian farmers** — built with Streamlit, scikit-learn and Google Gemini.
 
-KrishiMitra AI is a comprehensive agricultural decision support system that provides personalized crop recommendations based on soil conditions, weather data, and regional factors. Built specifically for Indian agriculture, it helps farmers make data-driven decisions to maximize yield and profitability.
-
-![KrishiMitra AI](https://img.shields.io/badge/Status-Production%20Ready-brightgreen)
-![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
-![Streamlit](https://img.shields.io/badge/Streamlit-1.24%2B-red)
-![License](https://img.shields.io/badge/License-MIT-yellow)
+Enter a PIN code, land size, budget and soil values. KrishiMitra AI checks the local weather, ranks the **top 3 crops** with a match score, and shows estimated costs, profit, market prices, sowing windows and cultivation tips. It can also answer farming questions in the farmer's own language.
 
 ## ✨ Features
 
-### 🎯 **Smart Crop Recommendations**
-- **Pincode-based Analysis**: Get region-specific crop suggestions based on your exact location
-- **Weather Integration**: Real-time weather data from OpenWeather API
-- **Soil Parameter Analysis**: NPK levels, pH, temperature, humidity, and rainfall analysis
-- **22+ Crop Varieties**: Comprehensive database covering cereals, pulses, fruits, and cash crops
+| Tab | What it does |
+|---|---|
+| **Get Recommendations** | Top-3 crops from an ML model (22 crops) with match %, financial estimates, live weather, mandi prices, PDF report |
+| **Crop Calendar** | Kharif / Rabi / Zaid sowing and harvest windows by month |
+| **Crop Diseases** | Disease database and leaf-photo diagnosis (Vision Transformer model) |
+| **Farming Guidelines** | Practical crop-wise guidance |
+| **AI Assistant** | Chat with Gemini for farming questions (replies in the selected language) |
+| **Crop Recommendation by AI** | Describe soil, climate and water; get Gemini suggestions |
+| **Fertilizer Guide** | Urea / DAP / MOP quantities and cost for your plot size and budget |
+| **Government Schemes** | National schemes (PM-KISAN, PMFBY, KCC, Soil Health Card, ...) with official links |
+| **Community** | National helplines (Kisan Call Centre, etc.) and community advice |
 
-### 📊 **Comprehensive Analysis**
-- **Financial Projections**: ROI, profit potential, and investment calculations
-- **Risk Assessment**: Market demand analysis and price trend predictions
-- **Growth Timeline**: Harvest time, sowing windows, and critical growth periods
-- **Regional Preferences**: Location-specific crop suitability scoring
+Also: light agriculture-themed UI, English/Hindi interface, read-aloud (text-to-speech) in the chosen language.
 
-### 🦠 **Disease Management**
-- **Disease Database**: Common diseases for each crop with symptoms
-- **Prevention Guidelines**: Best practices for disease prevention
-- **Treatment Recommendations**: Organic and chemical treatment options
-- **Seasonal Insights**: Disease prevalence by season and weather conditions
+## 🧠 How recommendations work
 
-### 📅 **Agricultural Calendar**
-- **Monthly Planning**: Crop calendar for Kharif, Rabi, and Zaid seasons
-- **Optimal Timing**: Best sowing and harvesting windows
-- **Seasonal Guidance**: Region-specific agricultural practices
+1. PIN code → latitude/longitude (local PIN database, OpenWeather fallback).
+2. Weather (temperature, humidity) from OpenWeather. **Rainfall fed to the model is the state's typical monthly rainfall**, because the model was trained on monthly-scale rainfall — not the short-term forecast.
+3. A Random Forest model (`crop_model.pkl`) trained on `Crop_recommendation.csv` scores 22 crops from N, P, K, temperature, humidity, pH and rainfall.
+4. Financials come from `app/crop_data.py`, scaled by land area. Values are **indicative per-acre estimates** for planning, not guarantees.
+5. Soil warnings (low N/P, acidic/alkaline pH) adjust tips and costs.
 
-## 🚀 Quick Start
+## 🚀 Run locally
 
-### Prerequisites
-- Python 3.8 or higher
-- OpenWeather API key (free tier available)
-- Internet connection for weather data
+```bash
+git clone https://github.com/jaygautam-creator/KrishiMitraAI.git
+cd KrishiMitraAI
+pip install -r requirements.txt
+```
 
-### Installation
+Create `app/.env` (it is git-ignored):
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/your-username/KrishiMitraAI.git
-   cd KrishiMitraAI
-   ```
+```
+OPENWEATHER_API_KEY=your_openweather_key      # required
+GEMINI_API_KEY=your_gemini_key                # for the AI tabs
+AGMARKNET_API_KEY=your_data_gov_in_key        # optional: live mandi prices (local CSV used otherwise)
+```
 
-2. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+Start the app:
 
-3. **Set up OpenWeather API key**
-   
-   **Option A: Environment Variable**
-   ```bash
-   # Windows
-   set OPENWEATHER_API_KEY=your_api_key_here
-   
-   # Linux/Mac
-   export OPENWEATHER_API_KEY=your_api_key_here
-   ```
-   
-   **Option B: Streamlit Secrets**
-   Create `.streamlit/secrets.toml`:
-   ```toml
-   OPENWEATHER_API_KEY = "your_api_key_here"
-   ```
+```bash
+./run.sh            # or: PORT=8502 ./run.sh
+```
 
-4. **Run the application**
-   ```bash
-   streamlit run app/app.py
-   ```
+`run.sh` sets `USE_TF=0 USE_FLAX=0` so `transformers` does not import TensorFlow, which can hang the app on some machines. If you start Streamlit manually, use:
+`USE_TF=0 USE_FLAX=0 streamlit run app/app.py`.
 
-5. **Open in browser**
-   - Local: `http://localhost:8501`
-   - Network: `http://your-ip:8501`
+The first use of leaf-disease detection downloads the Hugging Face model (~350 MB).
 
-### Getting OpenWeather API Key
-
-1. Visit [OpenWeatherMap](https://openweathermap.org/api)
-2. Sign up for a free account
-3. Get your API key from the dashboard
-4. Free tier includes 1000 calls/day (sufficient for personal use)
-
-## 📁 Project Structure
+## 📁 Project structure
 
 ```
 KrishiMitraAI/
-├── 📱 app/                          # Main application
-│   ├── app.py                      # Streamlit web interface
-│   ├── fresh_recommendations.py    # Recommendation engine
-│   ├── recommendation.py          # Core recommendation logic
-│   ├── export_pdf.py              # PDF report generation
-│   ├── crop_data.py               # Crop database management
-│   ├── data_preprocessing.py      # Data processing utilities
-│   └── crop_model.pkl             # Pre-trained ML model
-├── 🖼️ images/                      # Crop images (22+ varieties)
-├── 🗂️ backup/                      # Development backups
-├── 📊 Crop_recommendation.csv      # Training dataset
-├── 🔧 train_model.py               # Model training script
-├── 🔄 convert_model.py             # Model format conversion
-├── 📷 refresh_crop_images.py       # Image management utility
-├── 📋 requirements.txt             # Python dependencies
-└── 📖 README.md                    # This file
+├── app/
+│   ├── app.py                    # Streamlit UI and app logic
+│   ├── crop_data.py              # Per-crop cost/revenue/tips for all 22 model crops
+│   ├── export_pdf.py             # PDF report
+│   ├── recommendation.py, fresh_recommendations.py, data_preprocessing.py
+│   ├── pincodes.csv              # PIN → lat/lon/district/state
+│   ├── crop_yield.csv            # State rainfall and yields
+│   ├── static_prices.csv         # Mandi price snapshot (Rs/quintal)
+│   └── regional_crop_data.json
+├── images/                       # Crop photos
+├── crop_model.pkl                # Trained model + label encoder
+├── train_model.py                # Retrain from Crop_recommendation.csv
+├── .streamlit/config.toml        # Light theme
+├── run.sh
+└── requirements.txt
 ```
 
-## 🎮 Usage Guide
+## ⚠️ Notes and limitations
 
-### 1. **Get Crop Recommendations**
-   - Enter your 6-digit Indian PIN code
-   - Set land area (acres) and budget (₹)
-   - Adjust soil parameters (NPK levels, pH)
-   - Click "Get Crop Recommendations"
+- Recommendations are decision support, not a substitute for local agronomy advice; confirm with your Krishi Vigyan Kendra or district agriculture office.
+- `crop_model.pkl` was saved with scikit-learn 1.7.1; newer versions load it with a warning. Re-run `train_model.py` to refresh it.
+- Mandi prices use `static_prices.csv` unless an AgMarkNet key is set; not every crop has a matching commodity.
+- Never commit `.env` files (they are in `.gitignore`).
 
-### 2. **Analyze Results**
-   - View top crop recommendations with financial projections
-   - Check weather suitability and regional preferences
-   - Review cultivation guidelines and warnings
-   - Download PDF reports (if available)
+## 🔮 Ideas for next steps
 
-### 3. **Explore Disease Information**
-   - Select a crop from the disease management section
-   - Learn about common diseases and symptoms
-   - Get prevention and treatment recommendations
-   - Plan disease management strategies
+- District-level rainfall and soil data; automatic soil values from Soil Health Card
+- Marathi, Telugu, Gujarati and other translated UI strings
+- Live price trends and price alerts
+- Offline mode and a mobile-friendly PWA
 
-### 4. **Plan Your Farming Calendar**
-   - Check monthly crop calendar
-   - Identify optimal sowing periods
-   - Plan seasonal activities
+## 📄 License
 
-## 🔧 Advanced Configuration
-
-### Custom Model Training
-```bash
-# Retrain the model with new data
-python train_model.py
-
-# Convert model format
-python convert_model.py
-```
-
-### Adding New Crops
-1. Update `Crop_recommendation.csv` with new data
-2. Add crop images to `images/` folder
-3. Update disease database in `app.py`
-4. Retrain the model
-
-### Customizing Regions
-- Modify regional preferences in `fresh_recommendations.py`
-- Adjust weather condition mappings
-- Update pincode-based logic
-
-## 📋 Supported Crops
-
-### 🌾 **Cereals & Grains**
-- Rice, Wheat, Maize
-
-### 🫘 **Pulses & Legumes**
-- Chickpea, Kidneybeans, Pigeonpeas, Mothbeans
-- Mungbean, Blackgram, Lentil
-
-### 🍎 **Fruits**
-- Apple, Orange, Banana, Grapes, Pomegranate
-- Papaya, Watermelon, Muskmelon, Coconut, Mango
-
-### 💰 **Cash Crops**
-- Cotton, Sugarcane, Coffee, Jute
-
-## 🌐 API Integration
-
-### Weather Data
-- **Provider**: OpenWeatherMap API
-- **Features**: 5-day forecast, current conditions
-- **Data**: Temperature, humidity, rainfall, pressure
-
-### Location Services
-- **Geocoding**: PIN code to coordinates conversion
-- **Regional Analysis**: State/district level insights
-- **Weather Zones**: Climate zone classification
-
-## 🤝 Support & Community
-
-### Getting Help
-- 📧 **Email**: [Support Email]
-- 🐛 **Issues**: Create GitHub issues for bugs
-- 💬 **Discussions**: Community discussions welcome
-
-### Contributing
-We welcome contributions! Please submit pull requests for:
-- New crop varieties
-- Regional customizations
-- UI/UX improvements
-- Bug fixes and optimizations
-
-## 📊 Performance & Scalability
-
-### Current Capabilities
-- **Users**: Supports 1000+ concurrent users
-- **Response Time**: < 2 seconds for recommendations
-- **Accuracy**: 85%+ recommendation accuracy
-- **Coverage**: All Indian PIN codes supported
-
-## 📈 Roadmap
-
-### Version 2.0 (Coming Soon)
-- [ ] Mobile app (React Native)
-- [ ] Crop disease image recognition
-- [ ] Market price integration
-- [ ] Multi-language support (Hindi, Telugu, Tamil)
-- [ ] Offline mode capabilities
-
-### Version 3.0 (Future)
-- [ ] IoT sensor integration
-- [ ] Satellite imagery analysis
-- [ ] AI-powered chatbot
-- [ ] Farmer community platform
-
-## 📜 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- **Dataset**: Agricultural research institutions
-- **Weather API**: OpenWeatherMap
-- **UI Framework**: Streamlit team
-- **Icons**: Emoji contributors
-- **Community**: Indian farming community for feedback
-
-
-## 👥 Authors
-
-**Vaibhav Chaudhary**
-
-
-=======
-- GitHub: [@vaibhavchau37](https://github.com/vaibhavchau37)
-- Project: KrishiMitra AI - Intelligent Crop Recommendation System
-
----
-
-## 🙏 Acknowledgments
-
-- **ICAR** for agricultural research and data
-- **Indian Agricultural Universities** for crop research
-- **Open Source Community** for tools and libraries
-- **Indian Farmers** for inspiration and feedback
-
----
-
-## 📞 Support
-
-- **Issues**: [GitHub Issues](https://github.com/vaibhavchau37/KrishiMitraAI/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/vaibhavchau37/KrishiMitraAI/discussions)
-- **Email**: Contact through GitHub profile
-
----
-
-<div align="center">
-
-**Made with ❤️ for Indian Farmers**
-
-*Empowering Agriculture through AI*
-
-</div>
-
+MIT

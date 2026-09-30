@@ -413,7 +413,7 @@ TRANSLATIONS = {
         "specifically_suited": "Specifically suited for: {pin_code} region",
         "your_land_area": "Your land area: {land_area} acres",
         "financial_overview": "Financial Overview",
-        "expected_roi": "Expected ROI",
+        "expected_roi": "Expected Revenue",
         "profit_potential": "Profit Potential",
         "investment_needed": "Investment Needed",
         "per_acre_cost": "Per Acre Cost",
@@ -551,7 +551,7 @@ TRANSLATIONS = {
         "specifically_suited": "विशेष रूप से उपयुक्त: {pin_code} क्षेत्र",
         "your_land_area": "आपका जमीन क्षेत्र: {land_area} एकड़",
         "financial_overview": "वित्तीय अवलोकन",
-        "expected_roi": "अपेक्षित ROI",
+        "expected_roi": "अपेक्षित आय (राजस्व)",
         "profit_potential": "लाभ क्षमता",
         "investment_needed": "आवश्यक निवेश",
         "per_acre_cost": "प्रति एकड़ लागत",
@@ -858,31 +858,32 @@ CROP_NPK_TARGETS = {
 }
 
 # Government schemes database
-GOVERNMENT_SCHEMES = {
-    "Punjab": {
-        "small_farmer": [
-            {"name": "PM-KISAN", "description": "₹6,000 per year in three equal installments", "eligibility": "All farmer families"},
-            {"name": "Crop Insurance (PMFBY)", "description": "Premium subsidy for crop insurance", "eligibility": "All farmers"},
-            {"name": "Subsidy on Drip Irrigation", "description": "Up to 80% subsidy for small farmers", "eligibility": "Small and marginal farmers"}
-        ],
-        "marginal_farmer": [
-            {"name": "PM-KISAN", "description": "₹6,000 per year in three equal installments", "eligibility": "All farmer families"},
-            {"name": "Crop Insurance (PMFBY)", "description": "Premium subsidy for crop insurance", "eligibility": "All farmers"},
-            {"name": "Seed Subsidy", "description": "50% subsidy on certified seeds", "eligibility": "Small and marginal farmers"},
-            {"name": "Loan Waiver Scheme", "description": "Loan waiver for small loans", "eligibility": "Small and marginal farmers with loans up to ₹2 lakh"}
-        ]
-    }
-}
+# National schemes available across India. Benefit rates for state-run components vary,
+# so no state-specific percentages are hard-coded here - farmers should confirm locally.
+GOVERNMENT_SCHEMES = [
+    {"name": "PM-KISAN", "description": "Income support of ₹6,000 per year, paid in three installments of ₹2,000.",
+     "eligibility": "Landholding farmer families, subject to the scheme's exclusion criteria", "link": "https://pmkisan.gov.in"},
+    {"name": "PM Fasal Bima Yojana (PMFBY)", "description": "Crop insurance against yield loss from natural calamities, pests and diseases, with low fixed farmer premiums (2% Kharif, 1.5% Rabi, 5% commercial/horticulture crops).",
+     "eligibility": "Farmers growing notified crops in notified areas", "link": "https://pmfby.gov.in"},
+    {"name": "Kisan Credit Card (KCC)", "description": "Short-term bank credit for seeds, fertilizer and other cultivation costs, with interest subvention for timely repayment.",
+     "eligibility": "Farmers, tenant farmers and sharecroppers", "link": "https://www.myscheme.gov.in"},
+    {"name": "Soil Health Card", "description": "Free soil testing with crop-wise nutrient and fertilizer recommendations.",
+     "eligibility": "All farmers", "link": "https://soilhealth.dac.gov.in"},
+    {"name": "PM-KUSUM", "description": "Support for solar irrigation pumps and solar power on farms. Subsidy levels vary by state.",
+     "eligibility": "Farmers wanting solar pumps; check your state agency", "link": "https://pmkusum.mnre.gov.in"},
+    {"name": "PMKSY - Per Drop More Crop", "description": "Subsidy for drip and sprinkler irrigation. Rates vary by state and farmer category.",
+     "eligibility": "Farmers adopting micro-irrigation; check your state agriculture department", "link": "https://pmksy.gov.in"},
+    {"name": "e-NAM", "description": "Online national market to sell produce and see prices from many mandis.",
+     "eligibility": "Farmers selling through registered mandis", "link": "https://enam.gov.in"},
+]
 
-# Agricultural officers database
-AGRICULTURAL_OFFICERS = {
-    "Punjab": [
-        {"name": "Rajesh Kumar", "contact": "98765-43210", "district": "Amritsar", "specialization": "Cereal crops"},
-        {"name": "Sunita Patel", "contact": "97654-32109", "district": "Ludhiana", "specialization": "Vegetable crops"},
-        {"name": "Amandeep Singh", "contact": "96543-21098", "district": "Patiala", "specialization": "Soil health"},
-        {"name": "Priya Sharma", "contact": "95432-10987", "district": "Jalandhar", "specialization": "Organic farming"}
-    ]
-}
+# Real national helplines and portals (replaces the earlier placeholder officer list)
+FARMER_HELPLINES = [
+    {"name": "Kisan Call Centre", "contact": "1800-180-1551 (toll-free)", "about": "Free advice on crops, pests, weather and schemes in local languages"},
+    {"name": "PM-KISAN Helpline", "contact": "155261 / 011-24300606", "about": "Payment and registration queries"},
+    {"name": "Crop Insurance Helpline (PMFBY)", "contact": "14447", "about": "Claims and enrolment for crop insurance"},
+    {"name": "Krishi Vigyan Kendra (KVK) locator", "contact": "https://kvk.icar.gov.in", "about": "Find the farm science centre for your district for training and soil testing"},
+]
 
 # Utilities
 def http_get_json(url: str, timeout=15):
@@ -1455,7 +1456,7 @@ def get_crop_recommendations(prediction, land_area, budget, pin_code, soil_param
 
 def get_government_schemes(state, farmer_category):
     """Fetch relevant government schemes for the farmer"""
-    return GOVERNMENT_SCHEMES.get(state, {}).get(farmer_category, [])
+    return GOVERNMENT_SCHEMES
 
 def setup_offline_mode():
     """Cache essential data for offline use"""
@@ -1508,24 +1509,26 @@ def create_farmer_profile():
             st.success(t("profile_saved"))
 
 def connect_to_agricultural_officer():
-    """Provide information to connect with local agricultural officers"""
+    """Show real national helplines and how to reach the local agriculture office."""
     st.subheader(t("connect_officer"))
-    
+
     pin_code = st.session_state.get('pin_code', '')
-    if pin_code and len(pin_code) == 6:
-        # In a real implementation, this would use a geocoding API
-        # For demo, we'll just show all Punjab officers
-        for officer in AGRICULTURAL_OFFICERS.get("Punjab", []):
-            st.markdown(f"""
-            <div class="government-scheme">
-                <h4>{officer['name']}</h4>
-                <p><strong>District:</strong> {officer['district']}</p>
-                <p><strong>Specialization:</strong> {officer['specialization']}</p>
-                <p><strong>Contact:</strong> {officer['contact']}</p>
-            </div>
-            """, unsafe_allow_html=True)
+    info = load_pin_database().get(str(pin_code)) if pin_code else None
+    if info:
+        st.info(f"Your area: {str(info['district']).title()}, {str(info['state']).title()}. "
+                "Ask the District Agriculture Officer or your nearest Krishi Vigyan Kendra (KVK) for local advice.")
     else:
-        st.info("Enter your PIN code in the Crop Recommendation section to see local officers")
+        st.info("Tip: enter your PIN code in the Get Recommendations tab to see your district here.")
+
+    for h in FARMER_HELPLINES:
+        st.markdown(f"""
+        <div class="government-scheme">
+            <h4>{h['name']}</h4>
+            <p>{h['about']}</p>
+            <p><strong>Contact:</strong> {h['contact']}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    st.caption("Numbers are national services; please verify on the official portals before sharing personal details.")
 
 def community_advice_section():
     """Allow farmers to share advice and experiences"""
@@ -1817,6 +1820,7 @@ try:
                                     "Demand": c.get("demand", "-"),
                                 } for c in recommendations])
                                 st.dataframe(cmp_df, hide_index=True, use_container_width=True)
+                            st.caption("Financial figures are indicative per-acre estimates for planning. Actual costs and prices vary by region, variety and season; confirm with your local agriculture office.")
 
                         # Display each crop recommendation
                         for idx, crop in enumerate(recommendations, 1):
@@ -1839,7 +1843,7 @@ try:
 
                                 # Add voice read button
                                 if st.button(f"🔊 {t('read_aloud')}", key=f"read_{crop_name}"):
-                                    speak_text(f"Recommendation for {crop_name}. This crop is well suited for your region. Expected ROI is {crop.get('roi', 0)} rupees. Profit potential is {crop.get('profit', 0)} rupees.")
+                                    speak_text(f"Recommendation for {crop_name}. This crop is well suited for your region. Expected revenue is {crop.get('roi', 0):,.0f} rupees. Profit potential is {crop.get('profit', 0)} rupees.")
 
                                 # Financial Overview
                                 st.subheader(t("financial_overview"))
@@ -2371,7 +2375,7 @@ try:
             urea_cost = urea_needed * fertilizer_prices["Urea"]
             dap_cost = dap_needed * fertilizer_prices["DAP"]
             mop_cost = mop_needed * fertilizer_prices["MOP"]
-            total_cost = urea_cost + dap_cost + mop_cost
+            total_cost = (urea_cost + dap_cost + mop_cost) * land_area  # whole plot
 
             st.success(t("fertilizer_recommendations"))
             col1, col2, col3 = st.columns(3)
@@ -2389,7 +2393,7 @@ try:
             st.subheader("Budget Analysis")
             budget_col1, budget_col2 = st.columns(2)
             with budget_col1:
-                st.metric("Total Cost", f"Rs{total_cost:.0f}")
+                st.metric(f"Total Cost ({land_area:g} acre)", f"Rs{total_cost:.0f}")
             with budget_col2:
                 st.metric("Your Budget", f"Rs{budget}")
             
@@ -2417,18 +2421,21 @@ try:
         
         # Get farmer profile information
         farmer_type = st.session_state.farmer_profile["type"] if st.session_state.farmer_profile else "Small Farmer"
-        state = "Punjab"  # Default state, could be determined from PIN code
+        pin_info = load_pin_database().get(str(st.session_state.get("pin_code", "")))
+        state = str(pin_info["state"]).title() if pin_info else ""
         
         schemes = get_government_schemes(state, farmer_type.lower().replace(" ", "_"))
         
         if schemes:
             st.subheader(t("available_schemes"))
+            st.caption("National schemes" + (f" · your state: {state}. Benefit rates for some schemes differ by state - confirm with your local agriculture office." if state else " · benefit rates for some schemes differ by state."))
             for scheme in schemes:
                 st.markdown(f"""
                 <div class="government-scheme">
                     <h4>{scheme['name']}</h4>
                     <p>{scheme['description']}</p>
                     <p><strong>Eligibility:</strong> {scheme['eligibility']}</p>
+                    <p><a href="{scheme['link']}" target="_blank">Official portal ↗</a></p>
                 </div>
                 """, unsafe_allow_html=True)
                 

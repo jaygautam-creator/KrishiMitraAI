@@ -40,7 +40,7 @@ def generate_crop_pdf(recommendations, land_area):
             pdf.cell(0, 10, sanitize(f"{i}. {name}{conf_txt}"), 0, 1)
 
             pdf.set_font("Arial", "", 10)
-            pdf.cell(0, 8, sanitize(f"Expected ROI: Rs. {crop.get('roi', 0):,.2f}"), 0, 1)
+            pdf.cell(0, 8, sanitize(f"Expected Revenue: Rs. {crop.get('roi', 0):,.2f}"), 0, 1)
             pdf.cell(0, 8, sanitize(f"Profit Potential: Rs. {crop.get('profit', 0):,.2f}"), 0, 1)
             pdf.cell(0, 8, sanitize(f"Investment Needed: Rs. {crop.get('investment', 0):,.2f}"), 0, 1)
             pdf.cell(0, 8, sanitize(f"Market Demand: {crop.get('demand', 'Unknown')}"), 0, 1)
