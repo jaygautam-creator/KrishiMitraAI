@@ -64,9 +64,13 @@ try:
     HAS_VOICE = True
     
     # Voice functions
-    def speak_text(text, language="en"):
-        """Convert text to speech and play it"""
+    def speak_text(text, language=None):
+        """Convert text to speech in the selected UI language and play it"""
         try:
+            if language is None:
+                lang_name = st.session_state.get("language", "English")
+                language = globals().get("languages", {}).get(lang_name, {}).get("code", "en")
+            text = str(text).replace("*", "").replace("#", "").replace("_", " ")
             tts = gTTS(text=text, lang=language, slow=False)
             audio_bytes = io.BytesIO()
             tts.write_to_fp(audio_bytes)
@@ -1105,6 +1109,24 @@ def with_loading(message, func, *args, **kwargs):
         return func(*args, **kwargs)
 
 # AI Chatbot Functions
+def render_chat(history, empty_hint="Ask a question below to get started."):
+    """Render a chat history with native chat bubbles (markdown-safe)."""
+    if not history:
+        st.caption(empty_hint)
+        return
+    for message in history:
+        if message["role"] == "user":
+            with st.chat_message("user", avatar="👨‍🌾"):
+                st.markdown(message["content"])
+        else:
+            with st.chat_message("assistant", avatar="🌱"):
+                st.markdown(message["content"])
+
+def _language_instruction():
+    """Extra prompt line so the AI replies in the language chosen in the sidebar."""
+    lang = st.session_state.get("language", "English")
+    return "" if lang == "English" else f"\nReply in {lang} (use its native script), keeping crop names easy to understand.\n"
+
 def query_gemini(prompt):
     """Send a query to the Gemini API and return the response."""
     if not gemini_api_key:
@@ -1114,7 +1136,7 @@ def query_gemini(prompt):
         import google.generativeai as genai
         genai.configure(api_key=gemini_api_key)
         model = genai.GenerativeModel('gemini-2.5-flash')
-        response = model.generate_content(prompt)
+        response = model.generate_content(prompt + _language_instruction())
         return response.text
     except Exception as e:
         return f"Sorry, I encountered an error while processing your request: {str(e)}"
@@ -1156,7 +1178,7 @@ def get_gemini_crop_recommendation(user_query, context=""):
         If the question is not related to agriculture, politely redirect to farming topics.
         """
 
-        full_prompt = f"{system_prompt}\n\nFarmer's question: {user_query}"
+        full_prompt = f"{system_prompt}{_language_instruction()}\n\nFarmer's question: {user_query}"
         response = model.generate_content(full_prompt)
         return response.text
     except Exception as e:
@@ -2099,19 +2121,8 @@ try:
         st.markdown(f"#### {t('chat_with_ai')}")
 
         # Create a container for the chat messages
-        chat_container = st.container()
-
-        with chat_container:
-            st.markdown("<div class='chat-container'>", unsafe_allow_html=True)
-
-            # Display all messages in the chat history
-            for message in st.session_state.chat_history:
-                if message["role"] == "user":
-                    st.markdown(f"<div class='user-message'> 👨‍🌾 Farmer: {message['content']}</div>", unsafe_allow_html=True)
-                else:
-                    st.markdown(f"<div class='bot-message'> 🤖 KrishiMitra AI: {message['content']}</div>", unsafe_allow_html=True)
-
-            st.markdown('</div>', unsafe_allow_html=True)
+        with st.container():
+            render_chat(st.session_state.chat_history)
 
         # Voice input button
         if HAS_VOICE and st.button(t("voice_input"), key="voice_input_ai"):
@@ -2137,9 +2148,9 @@ try:
             clear_button = st.button(t("clear_chat"), use_container_width=True)
         with col3:
             if st.button(t("read_last"), use_container_width=True) and st.session_state.chat_history:
-                last_message = st.session_state.chat_history[-1]["content"]
-                if last_message and last_message.startswith("🤖"):
-                    speak_text(last_message.replace("🤖 KrishiMitra AI: ", ""))
+                replies = [m["content"] for m in st.session_state.chat_history if m["role"] == "assistant"]
+                if replies:
+                    speak_text(replies[-1])
 
         if clear_button:
             st.session_state.chat_history = []
@@ -2224,18 +2235,8 @@ try:
         # Display chat history
         st.markdown(f"### {t('ai_crop_chat')}")
 
-        chat_container = st.container()
-        with chat_container:
-            st.markdown("<div class='chat-container'>", unsafe_allow_html=True)
-
-            # Display all messages in the chat history
-            for message in st.session_state.ai_crop_chat:
-                if message["role"] == "user":
-                    st.markdown(f"<div class='user-message'> 👨‍🌾 Farmer: {message['content']}</div>", unsafe_allow_html=True)
-                else:
-                    st.markdown(f"<div class='bot-message'> 🤖 KrishiMitra AI: {message['content']}</div>", unsafe_allow_html=True)
-
-            st.markdown('</div>', unsafe_allow_html=True)
+        with st.container():
+            render_chat(st.session_state.ai_crop_chat)
 
         # Input form for crop recommendation
         with st.form("ai_crop_form"):
