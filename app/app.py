@@ -1080,6 +1080,25 @@ def get_weather_with_alerts(lat: float, lon: float, max_retries=3):
     
     return None, None, None, []
 
+def get_typical_monthly_rainfall(pin: str, default: float = 100.0) -> float:
+    """Typical monthly rainfall (mm) for the PIN's state: mean annual rainfall / 12.
+
+    The crop model was trained on monthly-scale rainfall (20-300 mm), so it must not be fed the
+    36-hour forecast total, which is close to 0 for most of the year.
+    """
+    try:
+        info = load_pin_database().get(str(pin))
+        if info is None or crop_yield_df is None:
+            return default
+        states = crop_yield_df["State"].astype(str).str.strip().str.lower()
+        rain = crop_yield_df.loc[states == str(info["state"]).strip().lower(), "Annual_Rainfall"]
+        if rain.empty:
+            return default
+        return float(min(max(rain.mean() / 12.0, 20.0), 300.0))
+    except Exception as e:
+        logger.warning(f"Typical rainfall lookup failed: {e}")
+        return default
+
 def with_loading(message, func, *args, **kwargs):
     """Execute a function with a loading spinner."""
     with st.spinner(message):
@@ -1706,12 +1725,17 @@ try:
                                 st.write(f"- {alert}")
                             st.markdown("</div>", unsafe_allow_html=True)
 
+                        # Model expects monthly-scale rainfall, not the short-term forecast
+                        model_rainfall = get_typical_monthly_rainfall(pin_code)
+                        st.caption(f"Crop model uses typical monthly rainfall for your state (~{model_rainfall:.0f} mm), "
+                                   f"not the {rainfall:.1f} mm forecast for the next 36 hours.")
+
                         # Feature order used during model training - ensure exact order
                         feature_order = ["N", "P", "K", "temperature", "humidity", "ph", "rainfall"]
                         features = pd.DataFrame({
                             "N": [n], "P": [p], "K": [k],
                             "temperature": [temp], "humidity": [humidity],
-                            "ph": [ph], "rainfall": [rainfall]
+                            "ph": [ph], "rainfall": [model_rainfall]
                         })[feature_order]
 
                         # Make prediction
