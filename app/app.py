@@ -1,4 +1,8 @@
 import os
+# Prevent transformers from importing TensorFlow/Flax (can hang); this app only needs PyTorch
+os.environ.setdefault("USE_TF", "0")
+os.environ.setdefault("USE_FLAX", "0")
+os.environ.setdefault("TRANSFORMERS_NO_TF", "1")
 from pathlib import Path
 from datetime import datetime
 import logging
@@ -569,7 +573,7 @@ st.markdown(f"<h2 class='sub-header'>{t('sub_header')}</h2>", unsafe_allow_html=
 
 # Paths & Constants
 BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "data"
+DATA_DIR = BASE_DIR / "data" if (BASE_DIR / "data").is_dir() else BASE_DIR
 IMAGES_DIR = BASE_DIR.parent / "images"
 MODEL_PATH = BASE_DIR / "crop_model.pkl"
 
@@ -1053,7 +1057,7 @@ def get_market_prices(crop_name, state=None, district=None):
     RESOURCE_ID = "9ef84268-d588-465a-a308-a864a43d0070"  # Daily market prices dataset
 
     if not API_KEY:
-        st.error("AgMarkNet API key missing. Set AGMARKNET_API_KEY in .env or Streamlit secrets.")
+        logger.info("AGMARKNET_API_KEY not set; using local price data")
         return None
 
     # Build query params
@@ -1097,28 +1101,41 @@ def _get_govt_prices(crop_name, state=None, district=None):
     # Implementation for another API
     return {"min": 0, "max": 0, "trend": "unknown"}
 
+# Model crop label -> commodity name(s) in static_prices.csv (exact names)
+_PRICE_ALIASES = {
+    "rice": ["Rice", "Paddy(Dhan)(Common)"], "chickpea": ["Bengal Gram(Gram)(Whole)"],
+    "blackgram": ["Black Gram (Urd Beans)(Whole)"], "mungbean": ["Green Gram (Moong)(Whole)"],
+    "lentil": ["Lentil (Masur)(Whole)"], "pigeonpeas": ["Arhar (Tur/Red Gram)(Whole)"],
+    "mothbeans": ["Moath Dal"], "muskmelon": ["Karbuja(Musk Melon)"],
+    "coconut": ["Coconut"], "grapes": ["Grapes"], "mango": ["Mango"], "banana": ["Banana"],
+}
+_HARDCODED_PRICES = {
+    "rice": (1800, 2200, "stable"), "wheat": (1900, 2100, "rising"), "cotton": (5500, 6000, "stable"),
+}
+
 def _get_static_prices(crop_name, state=None, district=None):
-    """Get static prices from local database."""
-    # Load from a CSV file or database
+    """Get prices (Rs/quintal) from the local mandi price CSV, with a small hardcoded fallback."""
+    key = str(crop_name).lower()
     if static_prices_df is not None:
         try:
-            # Filter by crop name
-            crop_data = static_prices_df[static_prices_df['Commodity'].str.lower() == crop_name.lower()]
-            if not crop_data.empty:
-                min_price = crop_data['Min_Price'].min()
-                max_price = crop_data['Max_Price'].max()
-                return {"min": min_price, "max": max_price, "trend": "stable"}
+            names = [n.lower() for n in _PRICE_ALIASES.get(key, [key])]
+            rows = static_prices_df[static_prices_df['Commodity'].str.lower().isin(names)]
+            if state and not rows.empty:
+                in_state = rows[rows['State'].str.lower() == str(state).lower()]
+                if not in_state.empty:
+                    rows = in_state
+            if not rows.empty:
+                lo = pd.to_numeric(rows['Min_x0020_Price'], errors='coerce').median()
+                hi = pd.to_numeric(rows['Max_x0020_Price'], errors='coerce').median()
+                if pd.notna(lo) and pd.notna(hi) and hi > 0:
+                    return {"min": int(lo), "max": int(hi), "trend": "stable"}
         except Exception as e:
             logger.error(f"Error reading static prices: {e}")
-    
-    # Fallback to hardcoded prices
-    static_prices = {
-        "Rice": {"min": 1800, "max": 2200, "trend": "stable"},
-        "Wheat": {"min": 1900, "max": 2100, "trend": "rising"},
-        "Cotton": {"min": 5500, "max": 6000, "trend": "stable"},
-    }
-    
-    return static_prices.get(crop_name, {"min": 0, "max": 0, "trend": "unknown"})
+
+    if key in _HARDCODED_PRICES:
+        lo, hi, tr = _HARDCODED_PRICES[key]
+        return {"min": lo, "max": hi, "trend": tr}
+    return {"min": 0, "max": 0, "trend": "unknown"}
 
 def get_real_time_market_prices(crop_name, state=None, district=None):
     """Fetch real market prices with multiple fallback sources."""
@@ -1192,54 +1209,77 @@ def get_region_from_pin(pin_code):
 def adjust_for_soil_conditions(crop, soil_params):
     """Adjust recommendations based on soil conditions."""
     n, p, k, ph = soil_params
-    
-    # Adjust for nitrogen levels
-    if n < 30 and crop['name'] in ['Wheat', 'Rice']:
-        crop['tips'].append('Apply additional nitrogen fertilizer during tillering stage')
-        crop['investment'] *= 1.1  # 10% higher investment for extra fertilizer
-    
-    # Adjust for phosphorus levels
-    if p < 15 and crop['name'] in ['Pulses', 'Oilseeds']:
-        crop['tips'].append('Apply phosphorus-rich fertilizer at sowing')
+    name = str(crop['name']).lower()
+
+    if n < 30 and name in ('wheat', 'rice', 'maize', 'cotton'):
+        crop['tips'].append('Soil nitrogen is low: apply extra nitrogen fertilizer in split doses')
+        crop['investment'] *= 1.1
+        crop['profit'] -= crop['investment'] * 0.1 / 1.1
+
+    if p < 15 and name in ('chickpea', 'lentil', 'blackgram', 'mungbean', 'pigeonpeas', 'kidneybeans', 'mothbeans'):
+        crop['tips'].append('Soil phosphorus is low: apply phosphorus-rich fertilizer at sowing')
         crop['investment'] *= 1.05
-    
-    # Adjust for pH levels
-    if ph < 5.5 and crop['name'] in ['Most crops']:
-        crop['warnings'].append('Soil is too acidic. Consider liming before planting.')
-        crop['investment'] *= 1.15  # Additional cost for soil amendment
-    
-    if ph > 8.0 and crop['name'] in ['Most crops']:
-        crop['warnings'].append('Soil is alkaline. Consider gypsum application or acidifying fertilizers.')
+        crop['profit'] -= crop['investment'] * 0.05 / 1.05
+
+    if ph < 5.5:
+        crop['warnings'].append('Soil is acidic (pH < 5.5). Consider liming before planting.')
+        crop['investment'] *= 1.15
+        crop['profit'] -= crop['investment'] * 0.15 / 1.15
+    elif ph > 8.0:
+        crop['warnings'].append('Soil is alkaline (pH > 8). Consider gypsum or acidifying fertilizers.')
         crop['investment'] *= 1.12
+        crop['profit'] -= crop['investment'] * 0.12 / 1.12
 
-def _get_base_recommendations(prediction, land_area, budget):
-    """Get base crop recommendations."""
-    return [
-        {
-            "name": prediction,
-            "roi": budget * 1.5,
-            "profit": budget * 0.8,
-            "investment": budget * 0.7,
-            "demand": "High",
-            "price_trend": 1,
-            "harvest_time": "3-4",
-            "resilience": "7/10",
-            "sowing_window": "June-July",
-            "critical_months": "August",
-            "weather_impact": {
-                "Temperature": "Optimal between 20-30°C",
-                "Rainfall": "Requires moderate rainfall"
-            },
-            "tips": ["Use organic fertilizers", "Maintain proper spacing"],
-            "warnings": ["Avoid waterlogging", "Watch for pest attacks"]
-        }
-    ]
+_DEFAULT_CROP_INFO = {
+    "investment_per_acre": 12000, "roi_per_acre": 24000, "harvest_time": "3-5",
+    "resilience": 6, "sowing_window": "Depends on region and season",
+    "critical_months": "-", "price_trend": 0, "demand": "Medium",
+    "weather_impact": {"Temperature": "Check suitability for your local climate",
+                       "Rainfall": "Ensure adequate water availability"},
+    "tips": ["Use certified seeds", "Maintain proper spacing"],
+    "warnings": ["Watch for pests and disease", "Avoid waterlogging"],
+}
 
-def get_fallback_recommendations(prediction, land_area, budget):
+def _build_crop_entry(name, land_area, budget, confidence=None):
+    """Build one recommendation entry from CROP_DATA (or defaults)."""
+    try:
+        from crop_data import CROP_DATA
+    except Exception:
+        CROP_DATA = {}
+    info = CROP_DATA.get(str(name).lower(), _DEFAULT_CROP_INFO)
+    investment = info["investment_per_acre"] * land_area
+    revenue = info["roi_per_acre"] * land_area
+    entry = {
+        "name": name,
+        "roi": revenue,
+        "profit": revenue - investment,
+        "investment": investment,
+        "demand": info.get("demand", "Medium"),
+        "price_trend": info.get("price_trend", 0),
+        "harvest_time": info.get("harvest_time", "3-5"),
+        "resilience": f"{info.get('resilience', 6)}/10",
+        "sowing_window": info.get("sowing_window", "-"),
+        "critical_months": info.get("critical_months", "-"),
+        "weather_impact": dict(info.get("weather_impact", {})),
+        "tips": list(info.get("tips", [])),
+        "warnings": list(info.get("warnings", [])),
+        "confidence": confidence,
+    }
+    if investment > budget:
+        entry["warnings"].insert(0, f"Estimated investment (₹{investment:,.0f}) exceeds your budget (₹{budget:,.0f}).")
+    return entry
+
+def _get_base_recommendations(prediction, land_area, budget, ranked=None):
+    """Get base crop recommendations (top-ranked crops if model probabilities are given)."""
+    if ranked:
+        return [_build_crop_entry(n, land_area, budget, c) for n, c in ranked]
+    return [_build_crop_entry(prediction, land_area, budget)]
+
+def get_fallback_recommendations(prediction, land_area, budget, ranked=None):
     """Get fallback recommendations if the main function fails."""
-    return _get_base_recommendations(prediction, land_area, budget)
+    return _get_base_recommendations(prediction, land_area, budget, ranked)
 
-def get_crop_recommendations(prediction, land_area, budget, pin_code, soil_params):
+def get_crop_recommendations(prediction, land_area, budget, pin_code, soil_params, ranked=None):
     """Get more accurate crop recommendations with regional considerations."""
     try:
         # Load regional crop suitability data
@@ -1249,7 +1289,7 @@ def get_crop_recommendations(prediction, land_area, budget, pin_code, soil_param
         region = get_region_from_pin(pin_code)
         
         # Get base recommendations
-        base_recommendations = _get_base_recommendations(prediction, land_area, budget)
+        base_recommendations = _get_base_recommendations(prediction, land_area, budget, ranked)
         
         # Adjust based on regional suitability
         for crop in base_recommendations:
@@ -1275,7 +1315,7 @@ def get_crop_recommendations(prediction, land_area, budget, pin_code, soil_param
         return base_recommendations
     except Exception as e:
         logger.exception("Enhanced recommendation function failed; using fallback")
-        return get_fallback_recommendations(prediction, land_area, budget)
+        return get_fallback_recommendations(prediction, land_area, budget, ranked)
 
 def get_government_schemes(state, farmer_category):
     """Fetch relevant government schemes for the farmer"""
@@ -1583,7 +1623,16 @@ try:
                             prediction = "Rice"  # Fallback crop
 
                         # Get recommendations
-                        recommendations = get_crop_recommendations(prediction, land_area, budget, pin_code, (n, p, k, ph))
+                        ranked = None
+                        try:
+                            if hasattr(model, "predict_proba") and label_encoder is not None:
+                                probs = model.predict_proba(features)[0]
+                                top_idx = np.argsort(probs)[::-1][:3]
+                                names = label_encoder.inverse_transform(model.classes_[top_idx])
+                                ranked = [(str(nm), float(probs[i])) for nm, i in zip(names, top_idx)]
+                        except Exception as e:
+                            logger.warning(f"Top-3 ranking unavailable: {e}")
+                        recommendations = get_crop_recommendations(prediction, land_area, budget, pin_code, (n, p, k, ph), ranked)
 
                         # Display success message and image status
                         st.success(t("analysis_complete").format(pin_code=pin_code))
@@ -1600,7 +1649,9 @@ try:
                         # Display each crop recommendation
                         for idx, crop in enumerate(recommendations, 1):
                             crop_name = crop.get('name', 'Unknown Crop')
-                            with st.expander(f"{idx}. {crop_name} (PIN: {pin_code})", expanded=(idx == 1)):
+                            conf = crop.get("confidence")
+                            conf_txt = f" - {conf*100:.0f}% match" if conf is not None else ""
+                            with st.expander(f"{idx}. {crop_name}{conf_txt} (PIN: {pin_code})", expanded=(idx == 1)):
                                 # Clear pincode identification
                                 st.info(t("specifically_for").format(pin_code=pin_code))
 
@@ -1636,7 +1687,10 @@ try:
                                 # Market Information
                                 st.subheader(t("market_information"))
                                 market_data = get_real_time_market_prices(crop_name)
-                                st.metric(t("market_price_range"), f"{market_data['min']} - {market_data['max']}/quintal")
+                                if market_data['max'] > 0:
+                                    st.metric(t("market_price_range"), f"₹{market_data['min']:,.0f} - ₹{market_data['max']:,.0f}/quintal")
+                                else:
+                                    st.metric(t("market_price_range"), "Not available")
                                 st.write(f"Price Trend: {market_data['trend'].capitalize()}")
 
                                 # Timeline & Season Info
