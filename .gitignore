@@ -58,3 +58,9 @@ Thumbs.db
 .vscode/
 *.code-workspace
 logs/
+
+# --- Local backups / archives (large, may contain secrets) ---
+KRISHIMITRAAI__FULL_BACKUP__DO_NOT_TOUCH/
+backup/extra_merged_files/
+.qodo/
+feedback.csv
